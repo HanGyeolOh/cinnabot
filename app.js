@@ -1,3 +1,4 @@
+/* @flow */
 var TelegramBot = require('node-telegram-bot-api');
 var chalk = require('chalk');
 var winston = require('winston');
@@ -74,98 +75,114 @@ function respondTelegramMessage(msg) {
             return processFeedbackReply(msg);
         }
 
-        var chatId = msg.chat.id;
-        var body = msg.text;
-        var command = body;
-        var args = "";
-        var spaceSepIndex = body.indexOf(' ');
-        if (spaceSepIndex > 0) {
-            command = body.substr(0, spaceSepIndex);
-            args = body.substr(spaceSepIndex + 1);
+        if (msg.text && msg.text.charAt(0) === '/') {
+            bot.sendChatAction(msg.chat.id, 'typing')
+                .then(function() {
+                    processMsgCommand(msg);
+                });
+        } else {
+            processMsgBody(msg);
         }
 
-        if (command.charAt(0) === '/') {
-            command = command.substr(1);
-        }
-
-        var basicCallback = createBasicCallback(chatId);
-        // manage commands
-        switch (command.toLowerCase()) {
-            case 'about':
-                return misc.about(basicCallback);
-            case 'start':
-                return misc.help(basicCallback);
-            case 'help':
-                return misc.help(basicCallback);
-            case 'psi':
-                return weather.getWeather(basicCallback);
-            case 'bus':
-                var busstop = args;
-                var callback = (!busstop) ? createPublicBusOptionsCallback(chatId) : basicCallback;
-                return travel.bus(chatId, busstop, msg.location, callback);
-            case 'nusbus':
-                busstop = args;
-                return travel.nusbus(chatId, busstop, msg.location, createNusBusOptionsCallback(chatId));
-            case 'dining':
-                return dining.start(chatId, bot);
-            case 'spaces':
-                return cinnamon.getAllSpaces(chatId, basicCallback);
-            case 'events':
-                return cinnamon.getEvents(basicCallback);
-            case 'cat':
-                return do_not_open.catfact(basicCallback);
-            case 'feedback':
-                return misc.start_feedback(chatId, args, msg, basicCallback);
-            case 'stats':
-                return statistics.getAllSummary(basicCallback);
-            case 'links':
-                return misc.getLinks(chatId, bot);
-            case 'register':
-                return auth.register(chatId, basicCallback);
-            case 'agree':
-                return auth.agree(chatId, basicCallback);
-            case 'fault':
-                return fault.start(chatId, bot, basicCallback);
-            case 'back':
-                let faultSession = sessions.getFaultSession(chatId);
-                if (faultSession) {
-                    return faultSession.back(chatId, bot, faultSession);
-                }
-                return default_msg(chatId);
-            case 'cancel':
-                return sessions.cancel(chatId, basicCallback);
-        }
-
-        switch (body.toLowerCase()) {
-            case 'towards buona vista':
-                return travel.bus(chatId, '19051', null, createPublicBusResponseCallback(chatId));
-            case 'towards clementi':
-                return travel.bus(chatId, '19059', null, createPublicBusResponseCallback(chatId));
-            default:
-                var diningSession = sessions.getDiningSession(chatId);
-                if (diningSession) {
-                    return diningSession.next(chatId, bot, body);
-                }
-                if (sessions.getFeedbackSession(chatId)) {
-                    return misc.continue_feedback(chatId, body, msg, basicCallback);
-                }
-                if (sessions.getNusBusSession(chatId)) {
-                    return travel.nusbus(chatId, body.toLowerCase(), msg.location, createBasicCallback(chatId));
-                }
-                if (sessions.getPublicBusSession(chatId)) {
-                    return travel.bus(chatId, body.toLowerCase(), msg.location, createBasicCallback(chatId));
-                }
-                if (sessions.getFaultSession(chatId)) {
-                    return fault.continueFeedback(chatId, body, bot);
-                }
-        }
-
-        return default_msg(chatId);
     } catch (e) {
         var errloc = e.stack.split('\n')[1];
         do_not_open.catfact(fact => bot.sendMessage(msg.chat.id, 'Cinnabot is sleeping right now 😴 Wake him up later. Here\'s a catfact instead:\n\n' + fact));
         config.ADMINS.forEach(admin => bot.sendMessage(admin, e.toString() + '\n' + errloc));
     }
+}
+
+function processMsgCommand(msg) {
+    var chatId = msg.chat.id;
+    var body = msg.text;
+    var command = '';
+    var args = '';
+    var spaceSepIndex = body.indexOf(' ');
+    if (spaceSepIndex > 0) {
+        command = body.substr(0, spaceSepIndex);
+        args = body.substr(spaceSepIndex + 1);
+    } else {
+        command = body;
+    }
+    var commandWord = command.substr(1);
+    var basicCallback = createBasicCallback(chatId);
+
+    switch (commandWord) {
+        case 'about':
+            return misc.about(basicCallback);
+        case 'start':
+            return misc.help(basicCallback);
+        case 'help':
+            return misc.help(basicCallback);
+        case 'psi':
+            return weather.getWeather(basicCallback);
+        case 'bus':
+            var busstop = args;
+            var callback = (!busstop) ? createPublicBusOptionsCallback(chatId) : basicCallback;
+            return travel.bus(chatId, busstop, msg.location, callback);
+        case 'nusbus':
+            busstop = args;
+            return travel.nusbus(chatId, busstop, msg.location, createNusBusOptionsCallback(chatId));
+        case 'dining':
+            return dining.start(chatId, bot);
+        case 'spaces':
+            return cinnamon.getAllSpaces(chatId, basicCallback);
+        case 'events':
+            return cinnamon.getEvents(basicCallback);
+        case 'cat':
+            return do_not_open.catfact(basicCallback);
+        case 'feedback':
+            return misc.start_feedback(chatId, args, msg, basicCallback);
+        case 'stats':
+            return statistics.getAllSummary(basicCallback);
+        case 'links':
+            return misc.getLinks(chatId, bot);
+        case 'register':
+            return auth.register(chatId, basicCallback);
+        case 'agree':
+            return auth.agree(chatId, basicCallback);
+        case 'fault':
+            return fault.start(chatId, bot, basicCallback);
+        case 'back':
+            let faultSession = sessions.getFaultSession(chatId);
+            if (faultSession) {
+                return faultSession.back(chatId, bot, faultSession);
+            }
+            return default_msg(chatId);
+        case 'cancel':
+            return sessions.cancel(chatId, basicCallback);
+    }
+}
+
+function processMsgBody(msg) {
+    var chatId = msg.chat.id;
+    var body = msg.text;
+    var basicCallback = createBasicCallback(chatId);
+
+    switch (body.toLowerCase()) {
+        case 'towards buona vista':
+            return travel.bus(chatId, '19051', null, createPublicBusResponseCallback(chatId));
+        case 'towards clementi':
+            return travel.bus(chatId, '19059', null, createPublicBusResponseCallback(chatId));
+        default:
+            var diningSession = sessions.getDiningSession(chatId);
+            if (diningSession) {
+                return diningSession.next(chatId, bot, body);
+            }
+            if (sessions.getFeedbackSession(chatId)) {
+                return misc.continue_feedback(chatId, body, msg, basicCallback);
+            }
+            if (sessions.getNusBusSession(chatId)) {
+                return travel.nusbus(chatId, body.toLowerCase(), msg.location, createBasicCallback(chatId));
+            }
+            if (sessions.getPublicBusSession(chatId)) {
+                return travel.bus(chatId, body.toLowerCase(), msg.location, createBasicCallback(chatId));
+            }
+            if (sessions.getFaultSession(chatId)) {
+                return fault.continueFeedback(chatId, body, bot);
+            }
+    }
+
+    return default_msg(chatId);
 }
 
 function processFeedbackReply(msg) {
